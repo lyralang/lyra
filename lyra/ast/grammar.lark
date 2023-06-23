@@ -1,0 +1,209 @@
+module: ( COMMENT
+        | struct_def
+        | variable_def
+        | function_def
+        | _NEWLINE )*
+
+parameter: NAME ":" type
+parameters: parameter ("," parameter?)*
+
+_FUNC_DECL: "sub" | "function" | "func" | "def" | "subroutine"
+function_sig: _FUNC_DECL NAME "(" [parameters] ")" [":" type]
+function_sig_2: [type] _FUNC_DECL NAME "(" [parameters] ")"
+function_def: function_sig body | function_sig_2 body
+
+_STRUCT_DECL: "struct"
+struct_member: NAME ":" type
+struct_def: _STRUCT_DECL NAME "{" [_NEWLINE] (struct_member ";" [_NEWLINE])+ [_NEWLINE] "}"
+
+
+variable_def: declaration
+
+stmt: if_stmt | while_stmt | until_stmt
+    | ((declaration
+    | assign
+    | aug_assign
+    | pass_stmt
+    | break_stmt
+    | continue_stmt
+    | return_stmt
+    | expr) ";") [COMMENT] [_NEWLINE]
+
+
+PASS: "pass"
+BREAK: "break"
+CONTINUE: "continue"
+RETURN: "return"
+_PRINT: "print"
+
+pass_stmt: PASS
+break_stmt: BREAK
+continue_stmt: CONTINUE
+return_stmt: RETURN [expr]
+
+body: "{" ([COMMENT] _NEWLINE | stmt)+ "}"
+cond_exec:  expr body
+default_exec: body
+if_stmt: "if" cond_exec ("elif" cond_exec)* ["else" default_exec]
+while_stmt: "while" expr body
+until_stmt: "until" expr body 
+
+
+type: NAME 
+    | get_item
+    | "*" (NAME | get_item) -> ptr
+
+?id: NAME
+variable: "var" id ":" type
+declaration: variable ["=" expr]
+assign: variable_access "=" expr
+      | variable_access postfix_op
+
+?postfix_op: "++" -> post_inc
+           | "--" -> post_dec
+
+?aug_operator: "+"  -> add
+             | "-"  -> sub
+             | "*"  -> mul
+             | "/"  -> div
+             | "%"  -> mod
+             | "**" -> pow
+             | "<<" -> shl
+             | ">>" -> shr
+             | _BITAND -> bitand
+             | _BITOR -> bitor
+             | _BITXOR -> bitxor
+             | _AND -> and
+             | _OR  -> or
+
+aug_assign: variable_access aug_operator "=" expr
+
+// Expressions
+expr: operation
+
+?arg: expr
+kwarg: NAME "=" expr
+?argument: (arg | kwarg)
+arguments: argument ("," argument)* [","]
+
+tuple: "(" "," ")" | "(" expr ( ("," expr)+ [","] | "," ) ")"
+list: "[" "]" | "[" expr ("," expr)* [","] "]"
+
+?operation: bool_or
+
+_AND: "&&"
+_OR: "||"
+_NOT: "!"
+
+// Boolean Operations
+?bool_or: bool_and
+        | bool_or _OR  bool_and -> _or
+
+?bool_and: bool_not
+         | bool_and _AND bool_not -> _and
+
+?bool_not: comparator
+         | _NOT bool_not -> _not
+
+_POW: "**"
+_SHL: "<<"
+_SHR: ">>"
+_BITAND: "&"
+_BITOR: "|"
+_BITXOR: "^"
+
+// Comparisions
+_EQ: "=="
+_NE: "!="
+_LE: "<="
+_GE: ">="
+_IN: "in"
+
+?comparator: bitwise_or
+           | comparator "<" bitwise_or ->  lt
+           | comparator ">" bitwise_or ->  gt
+           | comparator _EQ bitwise_or ->  eq
+           | comparator _NE bitwise_or ->  ne
+           | comparator _LE bitwise_or ->  le
+           | comparator _GE bitwise_or ->  ge
+           | comparator _IN bitwise_or ->  _in
+           | comparator _NOT _IN bitwise_or ->  _in
+
+// Binary Operations
+?bitwise_or : bitwise_xor
+            | bitwise_or _BITOR  bitwise_xor -> bitor
+?bitwise_xor: bitwise_and
+            | bitwise_xor _BITXOR  bitwise_and -> bitxor
+?bitwise_and: shift
+            | bitwise_and _BITAND  shift -> bitand
+
+?shift: summation
+      | shift _SHL  summation -> shl
+      | shift _SHR  summation -> shr
+
+?summation: product
+    | summation "+"  product -> add
+    | summation "-"  product -> sub
+
+?product: unary
+    | product "*"  unary -> mul
+    | product "/"  unary -> div
+    | product "%"  unary -> mod
+
+?unary: power 
+       |"+" atom -> uadd
+       | "-" atom -> usub
+       | "~" atom -> invert
+       | "*" atom -> ptr
+       | "&" atom -> deref
+
+?power: atom
+      | power _POW  atom -> pow
+
+get_item: variable_access "[" expr "]"
+get_attr: variable_access "." NAME
+call: variable_access "(" [arguments] ")"
+?variable_access: NAME -> get_var
+                | get_item
+                | get_attr
+                | call
+                | "(" variable_access ")"
+
+?atom: variable_access
+     | literal
+     | tuple -> setup_tuple
+     | list -> setup_list
+     | "(" operation ")"
+
+number: (HEX_NUMBER 
+        | DEC_NUMBER 
+        | OCT_NUMBER 
+        | FLOAT_NUMBER 
+        | BIN_NUMBER)
+
+string: STRING | LONG_STRING
+
+?literal: ( number | string | BOOL )
+
+// Tokens
+
+NAME: /[a-zA-Z_]\w*/
+STRING : /[ubf]?r?("(?!"").*?(?<!\\)(\\\\)*?"|'(?!'').*?(?<!\\)(\\\\)*?')/i
+LONG_STRING: /[ubf]?r?(""".*?(?<!\\)(\\\\)*?"""|'''.*?(?<!\\)(\\\\)*?''')/is
+
+DEC_NUMBER: /0|[1-9]\d*/i
+HEX_NUMBER: /0x[\da-f]*/i
+OCT_NUMBER: /0o[0-7]*/i
+BIN_NUMBER : /0b[0-1]*/i
+FLOAT_NUMBER.2: /((\d+\.\d*|\.\d+)(e[-+]?\d+)?|\d+(e[-+]?\d+))/i
+BOOL.2: "true" | "false"
+
+ESCAPED_IDENTIFIER: /\\([^\s]+)/
+COMMENT: /\/\/[^\n]*/
+_NEWLINE: ( /\r?\n[\t ]*/ | COMMENT )+
+
+%import common.ESCAPED_STRING
+%import common.WS
+
+%ignore /[\t \f]+/  // WS
+%ignore COMMENT
