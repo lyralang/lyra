@@ -5,12 +5,11 @@ module: ( COMMENT
         | _NEWLINE )*
 
 parameter: NAME ":" type
-parameters: parameter ("," parameter?)*
+parameters: parameter ("," parameter)*
 
 _FUNC_DECL: "sub" | "function" | "func" | "def" | "subroutine"
-function_sig: _FUNC_DECL NAME "(" [parameters] ")" [":" type]
-function_sig_2: [type] _FUNC_DECL NAME "(" [parameters] ")"
-function_def: function_sig body | function_sig_2 body
+function_sig: [type] _FUNC_DECL NAME "(" [parameters] ")" [":" type]
+function_def: function_sig body
 
 _STRUCT_DECL: "struct"
 struct_member: NAME ":" type
@@ -167,7 +166,6 @@ call: variable_access "(" [arguments] ")"
                 | get_item
                 | get_attr
                 | call
-                | "(" variable_access ")"
 
 ?atom: variable_access
      | literal
